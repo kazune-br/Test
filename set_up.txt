@@ -1,0 +1,475 @@
+AWS
+~ Django, Nginx, Gunicorn, PostgreSQL, EC2, RDS, S3, EBの設定まとめ ~
+
+
+#0: Network準備
+	VPCの作成
+		名前タグ: VPC_NAME
+		CIDR: 適当なCIDR値
+
+	サブネットの作成
+		名前タグ: Subnet_NAME
+		所属VPC: 所属させたいVPC_NAME
+		CIDR: ローカル通信用の有効なCIDRを紐付いているVPCのCIDRの中から選択
+
+	インターネットゲートウェイの作成
+		名前タグ: IGW_NAME
+		付随先VPC: 付随させたいVPC_NAME
+
+	ルートテーブル
+		名前タグ: RootTable_NAME
+		サブネット: ルートテーブルの選択
+		ルート追加:  0.0.0.0/0 | IGW_NAME
+
+	Webサーバー用のインスタンス(ec2)の作成
+		ネットワーク: VPC_NAME
+		サブネット: Subnet_NAME
+		自動割り当て: 有効化
+		プライマリIP: ローカル通信用の有効なIPアドレスを紐付いているサブネットのCIDRの中から選択(10.0.1.10)
+		Name: Instance_NAME
+		セキュリティグループ: SG_NAME
+				
+	セキュリティグループの設定
+		インバウンド:
+			HTTP: 
+				Port: 80  
+				CIDR: 0.0.0.0/0
+			SSH: 
+				PORT: 22
+				CIDR: 0.0.0.0/0		
+
+	Elastic IPの設定
+		-> 作成
+			 -> 関連付け
+				 -> インスタンスの選択
+					-> Instance_NAME
+
+
+	AWS Route53でドメインの取得及び設定
+    あとで
+    
+	SSH認証発行
+		あとで
+
+
+
+#1: EC2ログイン
+	<Local>
+		$ chmod 400 key.pem 
+		$ ssh -i "key.pem" ubuntu@ec2-.ap-northeast-1.compute.amazonaws.com
+
+
+
+#2: Python3, POSGRE, NGINXのダウンロード
+	<Web Server>
+		$ ps aux
+		$ sudo apt-get update
+			＊NOTE
+				ソフトウェア一覧を更新
+		$ sudo apt-get install python3-pip python3-dev libpq-dev postgresql postgresql-contrib nginx
+			＊NOTE
+				python3-dev: python-dev contains the header files you need to build Python extensions.
+				libpq-dev: PostgreSQL Library
+				postgresql-contrib:  PostgreSQLの追加ライブラリ
+				nginx: Webサーバー
+		
+		
+
+#3: PostgreSQL設定
+	<Web Server>
+		$ sudo -u postgres psql
+			 \du
+			CREATE ROLE app_user LOGIN CREATEDB PASSWORD 'app_pass';
+			CREATE DATABASE app_name OWNER app_user;
+			ALTER ROLE app_user SET client_encoding To 'utf8';
+			ALTER ROLE app_user SET default_transaction_isolation TO 'read committed';
+			ALTER ROLE app_user SET timezone TO 'UTC+9';
+			GRANT ALL PRIVILEGES ON DATABASE app_name TO app_user;
+			\q
+
+
+
+#4: VIRTUALENV設定
+	<Web Server>
+		$ sudo -H pip3 install --upgrade pip
+		$ sudo -H pip3 install virtualenv 
+		$ virtualenv py36
+		$ ls py36/bin
+		$ source py36/bin/activate
+			＊NOTE
+				source: プログラミングの中身を実行するコマンド
+		(py36) $ pip install django gunicorn psycopg2
+			＊NOTE
+				django: Python用のWebフレームワーク
+				gunicorn: Python用のWSGIソフトウェア
+				psycopg2: PostgreSQLとPythonの接続を確保するためのソフトウェア
+			
+
+
+#5: EC2へファイルの転送 w/ FILEZILLA
+	(1)サイトマネージャー
+	(2)新しいサイト
+		ホスト: IPアドレス
+		プロトコル: SFTP
+		ログオン: 鍵ファイル
+		ユーザ: ubuntu
+		キー: PEMのlocationを指定
+	(3)ローカルで作成したファイルをZIP化
+	(4)ZIPファイルをインスタンス先でUNZIP
+	
+	<Local>
+		$ ssh -i "key.pem" ubuntu@ec2-.ap-northeast-1.compute.amazonaws.com
+	
+	<Web Server>
+		$ sudo apt-get install unzip
+		$ sudo unzip unzipしたいファイル
+
+
+
+#6: IPアドレスを使って接続 with 内蔵サーバー
+	＊NOTE
+		セキュリティグループでポート8000が開いているか確認する
+		まだの場合はカスタムTCPを選択し、ポート8000を開ける
+
+	<Web Server>
+		(py36) $ pip install pillow  # 画像ファイルを扱うための設定
+		(py36) $ cd app_name/app_name
+		(py36) $ vi settings.py  # IPアドレスの設定とポスグレの設定を行う
+			--------------------------------------------------------------------
+			# WebサーバーインスタンスのIPアドレスを指定
+			ALLOWED_HOSTS = ['IP']
+			DATABASES = {
+    				'default': {
+        					'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        					'NAME': 'app_name',
+        					'USER': 'app_user',
+        					'PASSWORD': 'app_pass',
+        					'HOST': 'localhost',
+        					'PORT': '',
+    				}
+			}
+			--------------------------------------------------------------------
+
+		(py36) $ cd ../
+		(py36) $ python3 manage.py makemigrations
+		(py36) $ python3 manage.py migrate
+		(py36) $ python3 manage.py runserver 0.0.0.0:8000
+		(py36) $ sudo lsof -i -n -P
+
+
+
+#7: 管理ユーザーの追加
+	<Web Server>
+		(py36) $ python3 manage.py createsuperuser
+			Username: ubuntu_user
+			Email: ubuntu_mail
+			Pass: ubuntu_pass
+
+
+
+#8: GUNICORN(WSGI)の設定
+	＊NOTE
+		Ref: 
+			公式ドキュメント
+				http://docs.gunicorn.org/en/latest/index.html
+        
+	<Web Server>
+		(py36) $ which gunicorn 
+		>> /home/ubuntu/py36/bin/gunicorn
+		(py36) $ gunicorn --bind 0.0.0.0:8000 app_name.wsgi
+		(py36) $ deactivate
+
+
+
+#9: GUNICORNの自動化
+	<Web Server>
+		$ ls /etc/systemd/system
+		$ vi /etc/systemd/system/sshd.service
+		$ sudo vi /etc/systemd/system/gunicorn.service
+------------------------------------------------------------------------------------------------------------------
+[Unit]
+Description=gunicorn daemon
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/app_name
+ExecStart=/home/ubuntu/py36/bin/gunicorn --access-logfile - --workers 3 --bind unix:/home/ubuntu/app_name/app_name.sock app_name.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+------------------------------------------------------------------------------------------------------------------
+		$ sudo systemctl daemon-reload
+		$ sudo systemctl start gunicorn 
+		$ sudo systemctl enable gunicorn 
+		$ sudo systemctl status gunicorn
+		$ sudo journalctl -u gunicorn
+
+
+
+#10: NGINXの設定
+	<Web Server>
+		$ cd /etc/nginx
+		$ cd sites-available
+		$ sudo vi app_name
+		--------------------------------------------------------------------
+		server {
+     			listen 80;
+     			server_name PublicIP;
+
+    			location = /favicon.ico {access_log off; log_not_found off;}
+     			location /static/ {
+          			root /home/ubuntu/app_name;
+     			}
+
+     			location / {
+          			include proxy_params;
+          			proxy_pass http://unix:/home/ubuntu/app_name/app_name.sock;
+     			}
+		}
+		--------------------------------------------------------------------
+		$ sudo ln -s /etc/nginx/sites-available/app_name /etc/nginx/sites-enabled/
+		$ ls -la /etc/nginx/sites-enabled/
+		$ sudo nginx -t
+			＊NOTE:
+				NGINXのテストコマンド
+		$ sudo systemctl restart nginx 
+		$ sudo ufw delete allow 8000
+		$ sudo ufw allow 'Nginx Full'
+		$ sudo systemctl restart gunicorn
+
+		$ source py36/bin/activate
+		(py36) $ vim app_name/app_name/settings.py
+			--------------------------------------------------------------------
+			STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
+			--------------------------------------------------------------------
+		(py36) $ cd app_name
+		(py36) $ python3 manage.py collectstatic
+
+
+
+#11: DBサーバーの作成
+	<Local>
+		$ scp -i key.pem key.pem ubuntu@ec2-.apnortheast-1.compute.amazonaws.com:~/	
+    $ ssh -i "key.pem" ubuntu@ec2-.ap-northeast-1.compute.amazonaws.com
+    
+  <Web Server>
+    $ ssh -i "key.pem" ubuntu@ec2-.ap-northeast-1.compute.amazonaws.com
+
+	<DB Server>
+		$ sudo apt-get update
+		$ sudo apt-get install libpq-dev postgresql postgresql-contrib
+		$ psql --version
+		$ sudo -u postgres psql
+			\q
+
+		$ cd /etc/postgresql/9.5/main
+		$ sudo cat pg_hba.conf
+		$ sudo vim pg_hba.conf
+			--------------------------------------------------------------------
+			local   all             postgres                                peer
+			local   all             all                                           trust
+			host    all             all             0.0.0.0/0               md5
+			--------------------------------------------------------------------
+		$ sudo vim postgresql.conf
+			listen_addresses = '*'
+		$ cd
+		$ sudo /etc/init.d/postgresql restart
+			＊NOTE:
+				Other commands
+					sudo /etc/init.d/postgresql start 
+					sudo /etc/init.d/postgresql stop
+					sudo /etc/init.d/postgresql status
+	
+		$ sudo -u postgres psql 
+			\du
+			CREATE ROLE app_user LOGIN CREATEDB PASSWORD 'app_pass';
+			CREATE DATABASE app_name OWNER app_user;
+			ALTER ROLE app_user SET client_encoding To 'utf8';
+			ALTER ROLE app_user SET default_transaction_isolation TO 'read committed';
+			ALTER ROLE app_user SET timezone TO 'UTC+9';
+			GRANT ALL PRIVILEGES ON DATABASE app_name TO app_user;
+			\du
+			\l
+			\q
+		$ psql --username=app_user --password --dbname=app_name
+			\l
+			\t
+			\q
+
+	
+	<Web Server>
+		$ ping IPアドレス
+
+		$ psql -h IPアドレス -p ポート番号 -U ユーザ名 -d データベース名
+		$ source py36/bin/activate
+		(py36) $ cd app_name/app_name
+		(py36) $ vim settings.py
+			--------------------------------------------------------------------
+			DATABASES = {
+    				'default': {
+       	 				'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        					'NAME': 'app_name',
+        					'USER': 'app_user',
+        					'PASSWORD': 'app_pass',  
+        					'HOST': 'Private IP',
+        					'PORT': '5432',
+    				}
+			}
+			--------------------------------------------------------------------
+		(py36) $ cd ../
+		(py36) $ python3 manage.py makemigrations
+		(py36) $ python3 manage.py migrate
+		(py36) $ sudo systemctl restart nginx
+		(py36) $ sudo systemctl restart gunicorn
+		(py36) $ python3 manage.py createsuperuser
+			User: ubuntu
+			Mail: ubuntu@gmail.com
+			Pass: ubuntu_pass
+		
+	<DB Server>
+		$ psql --username=app_user --password --dbname=app_name
+			\dt
+			\d auth_user
+			select * from auth_user
+			\q
+
+
+
+#12: DBサーバーをRDSに変更する
+	<RDS>
+		DBAPP: PostgreSQL
+		DBインスタンス識別子: app_db
+		マスターユーザー: app_user
+		pass: app_pass
+		DBの名前 app_name
+		ポート: 5432
+		パラメータグループ: default.postgres9.6
+		SG: DBSG
+
+	<Webサーバー>
+		$ psql --host=app_db.cizsw2b1bwlm.ap-northeast-1.rds.amazonaws.com --port=5432 
+			   --username=app_user --password --dbname=app_name
+
+
+
+#13: StaticファイルをS3へ移行
+	<IAM>
+		Step1:
+			UserName: test
+			Options:
+				Programmatic access
+		
+		Step2:
+			Create Group
+				GroupName: TestGroup
+				Options:
+					AmazonS3FullAccess
+			Add User to Group
+				Choose: TestGroup
+			
+		Step3: *take a memo for all information written on the page
+			ユーザー: test
+			アクセスキーID:	HOGE
+			シークレットアクセスキー: HOGEHOGE
+      
+	<S3>
+		バケットの作成
+			バケット名: test-static => https://test-static.s3.amazonaws.com/static/
+			リージョン: 東京
+			コピー: No
+			=> 作成
+
+	<Webサーバー>
+		$ source /py36/bin/activate
+		(py36) $ pip install boto3
+		(py36) $ pip install django-storages
+		(py36) $ vim app_name/app_name/settings.py
+			-------------------------------------------------------------------------------------------------
+			INSTALLED_APPS = [
+    				'django.contrib.auth',
+    				....,
+    				'storages',
+			]
+
+			AWS_ACCESS_KEY_ID = 'HOGE'
+			AWS_SECRET_ACCESS_KEY = 'HOGEHOGE'
+			AWS_STORAGE_BUCKET_NAME = 'test-static'
+			AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+			AWS_S3_OBJECT_PARAMETERS = {
+    				'CacheControl': 'max-age=86400',
+			}
+			AWS_LOCATION = 'static'
+
+			STATICFILES_DIRS = [
+    				os.path.join(BASE_DIR, 'static/'),
+			]
+			STATIC_URL = 'https://%s/%s/' % (AWS_S3_CUSTOM_DOMAIN, AWS_LOCATION)
+			STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+			--------------------------------------------------------------------------------------------------
+
+		(py36) $ python3 manage.py collectstatic
+		(py36) $ touch storage_backends.py
+		(py36) $ vim storage_backends.py # settings.pyと同じ階層 
+			-------------------------------------------------------------------------------------------------
+			from storages.backends.s3boto3 import S3Boto3Storage
+
+			class MediaStorage(S3Boto3Storage):
+				location = 'media'
+				file_overwrite = False		
+ 			-------------------------------------------------------------------------------------------------
+
+		(py36) $ vim app_name/settings.py
+			-------------------------------------------------------------------------------------------------
+			DEFAULT_FILE_STORAGE = 'app_name.storage_backends.MediaStorage'
+			-------------------------------------------------------------------------------------------------
+
+	<S3>
+		test-staticの中を一旦空にする
+
+	<Webサーバー>
+		(py36) $ python3 manage.py collectstatic 
+		(py36) $ sudo systemctl restart nginx
+		(py36) $ sudo systemctl restart gunicorn 
+	
+		(py36) $ vim storage_backends.py
+			-------------------------------------------------------------------------------------------------
+			from django.conf import settings
+			from storages.backends.s3boto3 import S3Boto3Storage
+
+			class StaticStorage(S3Boto3Storage):
+    				location = settings.AWS_STATIC_LOCATION
+
+			class PublicMediaStorage(S3Boto3Storage):
+    				location = settings.AWS_PUBLIC_MEDIA_LOCATION
+    				file_overwrite = False
+
+			class PrivateMediaStorage(S3Boto3Storage):
+    				location = settings.AWS_PRIVATE_MEDIA_LOCATION
+    				default_acl = 'private'
+    				file_overwrite = False
+    				custom_domain = False
+			-------------------------------------------------------------------------------------------------
+
+		(py36) $ vim app_name/settings.py
+			-------------------------------------------------------------------------------------------------
+				AWS_STATIC_LOCATION = 'static'
+				STATIC_URL = 'https://%s/%s/' % (AWS_S3_CUSTOM_DOMAIN, AWS_STATIC_LOCATION)
+				STATICFILES_STORAGE = 'app_name.storage_backends.StaticStorage'
+
+				AWS_PUBLIC_MEDIA_LOCATION = 'media/public'
+				DEFAULT_FILE_STORAGE = 'app_name.storage_backends.PublicMediaStorage'
+
+				AWS_PRIVATE_MEDIA_LOCATION = 'media/private'
+				PRIVATE_FILE_STORAGE = 'app_name.storage_backends.PrivateMediaStorage'
+			-------------------------------------------------------------------------------------------------
+
+	<S3>
+		test-staticの中を空にする
+
+	<Webサーバー>
+		(py36) $ python3 manage.py collectstatic 
+		(py36) $ sudo systemctl restart nginx
+		(py36) $ sudo systemctl restart gunicorn 
+
