@@ -70,4 +70,20 @@ users.get("key").get
 
 // Object = User@6584df56
 users.get("key2").getOrElse("MECE")
+
+val user = new User(2)
+Future(user) // scala.concurrent.Future[User] = Future(<not completed>)
+
+// scala.concurrent.Future[User] = Future(<not completed>)
+Future(u).flatMap { value =>
+    Future(value)
+}
+
+Some(user) // Some[User] = Some(User(2))
+// Option[User] = Some(User@2fa061ac)
+Some(u).flatMap { value =>
+    println(value.userId)
+    Some(value)
+}
+
 ```
