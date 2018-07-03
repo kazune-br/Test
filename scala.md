@@ -36,7 +36,7 @@ users.get("key") // Option[User] = Some(User(1))
 
 def find(key: String) = Future.successful(users.get(key))
 find("key") // scala.concurrent.Future[Option[User]] = Future(Success(Some(User(1)))
-find("not key" ) // scala.concurrent.Future[Option[User]] = Future(Success(User(1)))
+find("not key" ) // scala.concurrent.Future[Option[User]] = Future(Success(None)))
 
 val checkId = 1
 users.find { case (_, user) => user.userId == checkId } // Option[(String, User)] = Some(key, User(1))
