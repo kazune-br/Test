@@ -1,4 +1,4 @@
-####関数リテラル
+#### 関数リテラル
 ```
 (x: Int) => x + 1  // res0: Int => Int = Function1
 
@@ -11,7 +11,7 @@ var test = (x: Int) => {
 // test: Int => Int = Function1
 ```
 
-####PlaceHolder
+#### PlaceHolder
 ```
 val lst = List(1, 2, 3, 4, 5)
 lst.foreach(x => println(x))
@@ -20,7 +20,7 @@ lst.filter(_ > 0)
 ```
 
 
-####Tuple, Future, caseの挙動の確認
+#### Tuple, Future, caseの挙動の確認
 ```
 (1, 2, 3)._1 // 1
 ("A", "B", "C")._2 // B
