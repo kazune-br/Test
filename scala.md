@@ -85,5 +85,29 @@ Some(u).flatMap { value =>
     println(value.userId)
     Some(value)
 }
-
 ```
+
+#### Option and map
+```
+// Option[Option[Int]] = Some(Some(1))
+Option(Option(1)).flatMap { outer =>
+    outer.flatMap { inner => 
+        println(inner) // 1
+        Option(Option(inner))
+    }
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
