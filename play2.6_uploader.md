@@ -73,7 +73,6 @@ POST /upload controllers.ImageUploadController.upload
 ## modify Conf file
 conf/application.conf
 ```
-play.http.parser.maxMemoryBuffer= 10MB  # Defaultでは128KB => サイズを超過するとCSRF系のエラーが発生する
-
+play.http.parser.maxMemoryBuffer= 10MB  # Default is 128KB => if size is over 128kb, error related to CSRF will occur.
 ```
 
