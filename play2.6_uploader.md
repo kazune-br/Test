@@ -1,4 +1,4 @@
-# Play2.6 Upload Image 準備
+# Play2.6 with Scala ~ How to Upload Image ~
 > Ref:
 - https://www.playframework.com/documentation/2.6.x/ScalaFileUpload
 - https://github.com/playframework/play-scala-fileupload-example
@@ -9,7 +9,7 @@
 - https://alvinalexander.com/source-code/scala/scala-how-get-current-directory-scala-application
 <br>
 
-## Controllerの準備
+## prepare Controller
 ex: controllers/ImageUploadController.scala
 ```
 package controllers
@@ -43,7 +43,7 @@ class ImageUploadController@Inject()(cc: MessagesControllerComponents)(implicit 
 ```
 <br>
 
-## Viewの準備
+## prepare View to show the form helping to upload image and the uploaded result 
 ex: views/upload/index
 ```
 @()(implicit request: MessagesRequestHeader)
@@ -61,7 +61,7 @@ ex: views/upload/index
 ```
 <br>
 
-## Routes
+## set new routes in Routes file
 ex: conf/routes
 ```
 GET  /index controllers.ImageUploadController.index
@@ -70,7 +70,7 @@ POST /upload controllers.ImageUploadController.upload
 ```
 <br>
 
-## Confの変更
+## modify Conf file
 conf/application.conf
 ```
 play.http.parser.maxMemoryBuffer= 10MB  # Defaultでは128KB => サイズを超過するとCSRF系のエラーが発生する
