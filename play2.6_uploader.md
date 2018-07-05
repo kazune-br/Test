@@ -1,4 +1,13 @@
 # Play2.6 Upload Image 準備
+> Ref:
+- https://www.playframework.com/documentation/2.6.x/ScalaFileUpload
+- https://github.com/playframework/play-scala-fileupload-example
+- https://www.playframework.com/documentation/2.6.x/ScalaForms
+- https://www.playframework.com/documentation/2.6.x/api/scala/index.html#play.api.data.Form
+- https://github.com/playframework/play-scala-fileupload-example/issues/50
+- https://blog.knoldus.com/2013/01/22/play-framework-uploading-a-file-to-server/
+- https://alvinalexander.com/source-code/scala/scala-how-get-current-directory-scala-application
+<br>
 
 ## Controllerの準備
 ex: controllers/ImageUploadController.scala
@@ -32,6 +41,7 @@ class ImageUploadController@Inject()(cc: MessagesControllerComponents)(implicit 
   }
 }
 ```
+<br>
 
 ## Viewの準備
 ex: views/upload/index
@@ -49,6 +59,7 @@ ex: views/upload/index
     }
 }
 ```
+<br>
 
 ## Routes
 ex: conf/routes
@@ -57,6 +68,7 @@ GET  /index controllers.ImageUploadController.index
 GET  /ret controllers.ImageUploadController.ret
 POST /upload controllers.ImageUploadController.upload
 ```
+<br>
 
 ## Confの変更
 conf/application.conf
