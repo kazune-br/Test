@@ -23,21 +23,21 @@ class ImageUploadController@Inject()(cc: MessagesControllerComponents)(implicit 
   extends MessagesAbstractController(cc) {
 
   def index = Action { implicit request =>
-    Ok(views.html.index())
+      Ok(views.html.index())
   }
   
   def ret = Action { implicit request =>
-    Ok(views.html.ret())
+      Ok(views.html.ret())
   }
 
   def upload = Action(parse.multipartFormData) { implicit request =>
-    request.body.file("image").map { image =>
-      val filename = Paths.get(image.filename).getFileName
-      image.ref.moveTo(Paths.get(s"./public/uploaded_pictures/$filename"), replace = true)
-      Redirect(routes.ImageUploadController.empty).flashing("success" -> "Uploading file is completed")
-    }.getOrElse {
-      Redirect(routes.ImageUpload.empty).flashing("error" -> "Missing file")
-    }
+      request.body.file("image").map { image =>
+          val filename = Paths.get(image.filename).getFileName
+          image.ref.moveTo(Paths.get(s"./public/uploaded_pictures/$filename"), replace = true)
+          Redirect(routes.ImageUploadController.empty).flashing("success" -> "Uploading file is completed")
+      }.getOrElse {
+          Redirect(routes.ImageUpload.empty).flashing("error" -> "Missing file")
+      }
   }
 }
 ```
